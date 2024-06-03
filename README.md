@@ -1,14 +1,15 @@
-# Open Job Description - Sessions for Python
+# Open Job Description - Models For Python
 
-[![pypi](https://img.shields.io/pypi/v/openjd-sessions.svg)](https://pypi.python.org/pypi/openjd-sessions)
-[![python](https://img.shields.io/pypi/pyversions/openjd-sessions.svg?style=flat)](https://pypi.python.org/pypi/openjd-sessions)
-[![license](https://img.shields.io/pypi/l/openjd-sessions.svg?style=flat)](https://github.com/OpenJobDescription/openjd-sessions/blob/mainline/LICENSE)
+[![pypi](https://img.shields.io/pypi/v/openjd-model.svg)](https://pypi.python.org/pypi/openjd-model)
+[![python](https://img.shields.io/pypi/pyversions/openjd-model.svg?style=flat)](https://pypi.python.org/pypi/openjd-model)
+[![license](https://img.shields.io/pypi/l/openjd-model.svg?style=flat)](https://github.com/OpenJobDescription/openjd-model/blob/mainline/LICENSE)
 
 Open Job Description is a flexible open specification for defining render jobs which are portable
-between studios and render solutions. This package provides a library that can be used to build
-a runtime that is able to run Jobs in a
-[Session](https://github.com/OpenJobDescription/openjd-specifications/wiki/How-Jobs-Are-Run#sessions)
-as defined by Open Job Description.
+between studios and render management solutions. This package provides a Python implementation of the
+data model for Open Job Description's template schemas. It can parse, validate, create JSON/Yaml
+documents for the Open Job Description specification, and more. A main use-case that this library
+targets is interoperability by creating applications to translate a Job from Open Job Description
+to the render management software of your choice.
 
 For more information about Open Job Description and our goals with it, please see the
 Open Job Description [Wiki on GitHub](https://github.com/OpenJobDescription/openjd-specifications/wiki).
@@ -17,12 +18,8 @@ Open Job Description [Wiki on GitHub](https://github.com/OpenJobDescription/open
 
 This library requires:
 
-1. Python 3.9 or higher;
-2. Linux, MacOS, or Windows operating system;
-3. On Linux/MacOS:
-    * `sudo`
-4. On Windows:
-    * CPython implementation of Python
+1. Python 3.9 or higher; and
+2. Linux, MacOS, or Windows operating system.
 
 ## Versioning
 
@@ -32,7 +29,7 @@ versions will increment during this initial development stage, they are describe
 
 1. The MAJOR version is currently 0, indicating initial development. 
 2. The MINOR version is currently incremented when backwards incompatible changes are introduced to the public API. 
-3. The PATCH version is currently incremented when bug fixes or backwards compatible changes are introduced to the public API.
+3. The PATCH version is currently incremented when bug fixes or backwards compatible changes are introduced to the public API. 
 
 ## Contributing
 
@@ -43,30 +40,100 @@ Please see [CONTRIBUTING.md](./CONTRIBUTING.md) for our contributing guidelines.
 
 ## Example Usage
 
-### Running a Session
+### Reading and Validating a Template File
 
 ```python
 from openjd.model import (
-    StepParameterSpaceIterator,
+    DecodeValidationError,
+    DocumentType,
+    JobTemplate,
+    document_string_to_object,
+    decode_job_template
+)
+
+# String containing the json of the job template
+template_string = "..."
+try:
+    template_object = document_string_to_object(
+        document=template_string,
+        document_type=DocumentType.JSON
+    )
+    # Use 'decode_environment_template()' instead if decoding an
+    # Environment Template
+    job_template = decode_job_template(template=template_object)
+except DecodeValidationError as e:
+    print(str(e))
+```
+
+### Creating a Template Model
+
+```python
+from openjd.model.v2023_09 import *
+
+job_template = JobTemplate(
+    specificationVersion="jobtemplate-2023-09",
+    name="DemoJob",
+    steps=[
+        StepTemplate(
+            name="DemoStep",
+            script=StepScript(
+                actions=StepActions(
+                    onRun=Action(
+                        command="python",
+                        args=["-c", "print('Hello world!')"]
+                    )
+                )
+            )
+        )
+    ]
+)
+```
+
+### Converting a Template Model to a Dictionary
+
+```python
+import json
+from openjd.model import (
+    decode_job_template,
+    model_to_object,
+)
+from openjd.model.v2023_09 import *
+
+job_template = JobTemplate(
+    specificationVersion="jobtemplate-2023-09",
+    name="DemoJob",
+    steps=[
+        StepTemplate(
+            name="DemoStep",
+            script=StepScript(
+                actions=StepActions(
+                    onRun=Action(
+                        command="echo",
+                        args=["Hello world"]
+                    )
+                )
+            )
+        )
+    ]
+)
+
+obj = model_to_object(model=job_template)
+print(json.dumps(obj))
+```
+
+### Creating a Job from a Job Template
+
+```python
+import os
+from pathlib import Path
+from openjd.model import (
+    DecodeValidationError,
     create_job,
     decode_job_template,
     preprocess_job_parameters
 )
-from openjd.sessions import (
-    LOG,
-    ActionState,
-    ActionStatus,
-    Session
-)
-import logging
-import os
-from pathlib import Path
-import sys
-from threading import Event
 
-#   Setup
-# ========
-job_template_path = Path("/absolute/path/to/job")
+job_template_path = Path("/absolute/path/to/job/template.json")
 job_template = decode_job_template(
     template={
         "name": "DemoJob",
@@ -74,203 +141,151 @@ job_template = decode_job_template(
         "parameterDefinitions": [
             { "name": "Foo", "type": "INT" }
         ],
-        "jobEnvironments": [
-            {
-                "name": "DemoJobEnv",
-                "script": {
-                    "actions": {
-                        "onEnter": { "command": "python", "args": [ "-c", "print('Entering DemoJobEnv')" ] },
-                        "onExit": { "command": "python", "args": [ "-c", "print('Exiting DemoJobEnv')" ] }
-                    }
-                }
-            }
-        ],
         "steps": [
             {
                 "name": "DemoStep",
-                "stepEnvironments": [
-                    {
-                        "name": "DemoStepEnv",
-                        "script": {
-                            "actions": {
-                        "onEnter": { "command": "python", "args": [ "-c", "print('Entering DemoStepEnv')" ] },
-                        "onExit": { "command": "python", "args": [ "-c", "print('Exiting DemoStepEnv')" ] }
-                    }
-                        }
-                    }
-                ],
-                "parameterSpace": {
-                    "taskParameterDefinitions": [
-                        { "name": "Bar", "type": "INT", "range": "1-10" }   
-                    ]
-                },
                 "script": {
                     "actions": {
-                        "onRun": { "command": "python", "args": [ "-c", "print(r'Foo={{Param.Foo}} Bar={{Task.Param.Bar}}')" ] }
+                        "onRun": { "command": "python", "args": [ "-c", "print(r'Foo={{Param.Foo}}')" ] }
                     }
                 }
             }
         ]
     }
 )
-job_parameters = preprocess_job_parameters(
-    job_template=job_template,
-    job_parameter_values={
-        "Foo": "12"
-    },
-    job_template_dir=job_template_path,
-    current_working_dir=Path(os.getcwd())
+try:
+    parameters = preprocess_job_parameters(
+        job_template=job_template,
+        job_parameter_values={
+            "Foo": "12"
+        },
+        job_template_dir=job_template_path.parent,
+        current_working_dir=Path(os.getcwd())
+    )
+    job = create_job(
+        job_template=job_template,
+        job_parameter_values=parameters
+    )
+except (DecodeValidationError, RuntimeError) as e:
+    print(str(e))
+```
+
+### Working with Step dependencies
+
+```python
+from openjd.model import (
+    StepDependencyGraph,
+    create_job,
+    decode_job_template
 )
-job = create_job(
-    job_template=job_template,
-    job_parameter_values=job_parameters
+
+job_template = decode_job_template(
+    template={
+        "name": "DemoJob",
+        "specificationVersion": "jobtemplate-2023-09",
+        "steps": [
+            {
+                "name": "Step1",
+                "script": {
+                    "actions": {
+                        "onRun": { "command": "python", "args": [ "-c", "print('Step1')" ] }
+                    }
+                }
+            },
+            {
+                "name": "Step2",
+                "dependencies": [ { "dependsOn": "Step1" }, { "dependsOn": "Step3" }],
+                "script": {
+                    "actions": {
+                        "onRun": { "command": "python", "args": [ "-c", "print('Step2')" ] }
+                    }
+                }
+            },
+            {
+                "name": "Step3",
+                "script": {
+                    "actions": {
+                        "onRun": { "command": "echo", "args": [ "Step3" ] }
+                    }
+                }
+            },
+        ]
+    }
+)
+job = create_job(job_template=job_template, job_parameter_values={})
+dependency_graph = StepDependencyGraph(job=job)
+
+for step in job.steps:
+    step_node = dependency_graph.step_node(stepname=step.name)
+    if step_node.in_edges:
+        name_list = ', '.join(edge.origin.step.name for edge in step_node.in_edges)
+        print(f"Step '{step.name}' depends upon: {name_list}")
+    if step_node.out_edges:
+        name_list = ', '.join(edge.dependent.step.name for edge in step_node.out_edges)
+        print(f"The following Steps depend upon '{step.name}': {name_list}")
+
+print(f"\nSteps in topological order: {[step.name for step in dependency_graph.topo_sorted()]}")
+# The following Steps depend upon 'Step1': Step2
+# Step 'Step2' depends upon: Step1, Step3
+# The following Steps depend upon 'Step3': Step2
+
+# Steps in topological order: ['Step1', 'Step3', 'Step2']
+```
+
+### Working with a Step's Tasks
+
+```python
+from openjd.model import (
+    StepParameterSpaceIterator,
+    create_job,
+    decode_job_template
 )
 
-# stdout/stderr from the Session's running processes are sent to LOG
-LOG.addHandler(logging.StreamHandler(stream=sys.stdout))
-
-#   Run the Session
-# ======
-action_event = Event()
-last_status: ActionStatus = None
-
-def action_complete_callback(session_id: str, status: ActionStatus) -> None:
-    # This function will be called by the Session when one of the processes
-    # that was started has experienced a status change.
-    # e.g. Completing as FAILED/SUCCEEDED, or an update to a progress message.
-    global last_status
-    last_status = status
-    if status.state != ActionState.RUNNING:
-        action_event.set()
-
-# Run all tasks in the DemoStep within a Session
-with Session(
-    session_id="demo",
-    job_parameter_values=job_parameters,
-    callback=action_complete_callback
-) as session:
-    unwind_session: bool = False
-    environment_ids = list[str]()
-    step = job.steps[0]
-    try:
-        def run_environment(env):
-            global status
-            action_event.clear()
-            id = session.enter_environment(environment=env)
-            environment_ids.append(id)
-            # enter_environment is non-blocking, wait for the process to complete
-            action_event.wait()
-            if last_status.state in (ActionState.CANCELED, ActionState.FAILED):
-                raise RuntimeError("Abnormal exit")
-        # Enter each job environment
-        for env in job.jobEnvironments:
-            run_environment(env)
-        # Enter each step environment
-        for env in step.stepEnvironments:
-            run_environment(env)
-        # Run each task in the step
-        for task_parameters in StepParameterSpaceIterator(space=step.parameterSpace):
-            action_event.clear()
-            session.run_task(
-                step_script=step.script,
-                task_parameter_values=task_parameters
-            )
-            # run_task is non-blocking, wait for the process to complete
-            action_event.wait()
-            if last_status.state in (ActionState.CANCELED, ActionState.FAILED):
-                raise RuntimeError("Abnormal exit")
-    except RuntimeError:
-        pass
-    finally:
-        # Exit all environments in the reverse order that they were entered.
-        environment_ids.reverse()
-        for _id in environment_ids:
-            session.exit_environment(identifier=_id)
-            action_event.clear()
-            action_event.wait()
+job_template = decode_job_template(
+    template={
+        "name": "DemoJob",
+        "specificationVersion": "jobtemplate-2023-09",
+        "steps": [
+            {
+                "name": "DemoStep",
+                "parameterSpace": {
+                    "taskParameterDefinitions": [
+                        { "name": "Foo", "type": "INT", "range": "1-5" },
+                        { "name": "Bar", "type": "INT", "range": "1-5" }
+                    ],
+                    "combination": "(Foo, Bar)"
+                },
+                "script": {
+                    "actions": {
+                        "onRun": {
+                            "command": "python",
+                            "args": [ "-c", "print(f'Foo={{Task.Param.Foo}}, Bar={{Task.Param.Bar}}"]
+                        }
+                    }
+                }
+            },
+        ]
+    }
+)
+job = create_job(job_template=job_template, job_parameter_values={})
+for step in job.steps:
+    iterator = StepParameterSpaceIterator(space=step.parameterSpace)
+    print(f"Step '{step.name}' has {len(iterator)} Tasks")
+    for param_set in iterator:
+        print(param_set)
+# Step 'DemoStep' has 5 Tasks
+# {'Foo': ParameterValue(type=<ParameterValueType.INT: 'INT'>, value='1'), 'Bar': ParameterValue(type=<ParameterValueType.INT: 'INT'>, value='1')}
+# {'Foo': ParameterValue(type=<ParameterValueType.INT: 'INT'>, value='2'), 'Bar': ParameterValue(type=<ParameterValueType.INT: 'INT'>, value='2')}
+# {'Foo': ParameterValue(type=<ParameterValueType.INT: 'INT'>, value='3'), 'Bar': ParameterValue(type=<ParameterValueType.INT: 'INT'>, value='3')}
+# {'Foo': ParameterValue(type=<ParameterValueType.INT: 'INT'>, value='4'), 'Bar': ParameterValue(type=<ParameterValueType.INT: 'INT'>, value='4')}
+# {'Foo': ParameterValue(type=<ParameterValueType.INT: 'INT'>, value='5'), 'Bar': ParameterValue(type=<ParameterValueType.INT: 'INT'>, value='5')}
 ```
-
-### Impersonating a User
-
-This library supports running its Session Actions as a different operating system
-user than the user that is running the library. In the following, we refer to the
-operating system user that is running this library as the `host` user and the
-user that is being impersonated to run actions as the `actions` user.
-
-This feature exists to:
-1. Provide a means to securely isolate the environment and files of the `host` user
-   from the environment in which the Session Actions are run. Configure your filesystem
-   permissions, and user groups for the `host` and `actions` users such that the `actions`
-   user cannot read, write, or execute any of the `host` user files that it should not be
-   able to.
-2. Provide a way for you to permit access, on a per-Session basis, to specific local and
-   shared filesystem assets to the running Actions running in the Session.
-
-#### Impersonating a User: POSIX Systems
-
-To run an impersonated Session on POSIX Systems modify the "Running a Session" example
-as follows:
-
-```
-...
-from openjd.sessions import PosixSessionUser
-...
-user = PosixSessionUser($USERNAME$, password=$PASSWORD_OF_USERNAME$)
-...
-with Session(
-    session_id="demo",
-    job_parameter_values=job_parameters,
-    callback=action_complete_callback,
-    user=user
-) as session:
-    ...
-```
-
-You must ensure that the `host` user is able to run commands as the `actions` user 
-with passwordless `sudo` by, for example, adding a rule like follows to your
-`sudoers` file or making the equivalent change in your user permissions directory:
-
-```
-host ALL=(actions) NOPASSWD: ALL
-```
-
-#### Impersonating a User: Windows Systems
-
-To run an impersonated Session on Windows Systems modify the "Running a Session" example
-as follows:
-
-```
-...
-from openjd.sessions import WindowsSessionUser
-...
-# If you're running in an interactive logon session (e.g. cmd or powershell on your desktop)
-user = WindowsSessionUser($USERNAME$, password=$PASSWORD_OF_USERNAME$)
-# If you're running in a Windows Service
-user = WindowsSessionUser($USERNAME$, logon_token=user_logon_token)
-# Where `user_logon_token` is a token that you have created that is compatible
-# with the Win32 API: CreateProcessAsUser
-...
-with Session(
-    session_id="demo",
-    job_parameter_values=job_parameters,
-    callback=action_complete_callback,
-    user=user
-) as session:
-    ...
-```
-
-If running in a Windows Service, then you must ensure that:
-1. The `host` user is an Administrator, LocalSystem, or LocalService user as your
-   security posture requires; and
-2. The `host` user has the [Replace a process level token](https://learn.microsoft.com/en-us/windows/security/threat-protection/security-policy-settings/replace-a-process-level-token)
-   privilege.
-
 
 ## Downloading
 
 You can download this package from:
-- [PyPI](https://pypi.org/project/openjd-sessions/)
-- [GitHub releases](https://github.com/OpenJobDescription/openjd-sessions-for-python/releases)
+- [PyPI](https://pypi.org/project/openjd-model/)
+- [GitHub releases](https://github.com/OpenJobDescription/openjd-model-for-python/releases)
 
 ### Verifying GitHub Releases
 
@@ -279,8 +294,8 @@ You can verify the authenticity of the release artifacts using the `gpg` command
 1) Download the desired release artifacts from the GitHub releases page. Make sure to download the corresponding PGP signature file (ending with `.sig`) as well.
 For example, if you would like to verify your download of the wheel for version `1.2.3`, you should have the following files downloaded:
     ```
-    openjd_sessions-1.2.3-py3-none-any.whl
-    openjd_sessions-1.2.3-py3-none-any.whl.sig
+    openjd_model-1.2.3-py3-none-any.whl
+    openjd_model-1.2.3-py3-none-any.whl.sig
     ```
 
 2) Install the `gpg` command line tool. The installation process varies by operating system. Please refer to the GnuPG website for instructions: https://gnupg.org/download/
@@ -371,7 +386,7 @@ For example, if you would like to verify your download of the wheel for version 
 6) Verify the signature of the Open Job Description release via `gpg --verify`. The command for verifying the example files from step 1 would be:
 
     ```
-    gpg --verify ./openjd_sessions-1.2.3-py3-none-any.whl.sig ./openjd_sessions-1.2.3-py3-none-any.whl
+    gpg --verify ./openjd_model-1.2.3-py3-none-any.whl.sig ./openjd_model-1.2.3-py3-none-any.whl
     ```
 
 ## Security

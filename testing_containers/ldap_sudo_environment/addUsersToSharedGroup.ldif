@@ -1,9 +1,0 @@
-dn: cn=sharedgroup,ou=Groups,dc=environment,dc=internal
-changetype: modify
-add: memberUid
-memberUid: hostuser
-
-dn: cn=sharedgroup,ou=Groups,dc=environment,dc=internal
-changetype: modify
-add: memberUid
-memberUid: targetuser

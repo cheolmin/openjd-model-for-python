@@ -6,6 +6,12 @@ import sys
 from dataclasses import dataclass
 from hatchling.builders.hooks.plugin.interface import BuildHookInterface
 from typing import Any, Optional
+#from typing import Dict, List
+
+from typing import Dict as dict
+from typing import List as list
+
+
 
 
 _logger = logging.Logger(__name__, logging.INFO)

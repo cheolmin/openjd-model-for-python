@@ -54,7 +54,7 @@ For more information see the [Code of Conduct FAQ](https://aws.github.io/code-of
 opensource-codeofconduct@amazon.com with any additional questions or comments.
 
 
-## Security Issue Notifications
+## Security issue notifications
 
 We take all security reports seriously. When we receive such reports, we will 
 investigate and subsequently address any potential vulnerabilities as quickly 

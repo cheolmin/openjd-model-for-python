@@ -3,15 +3,15 @@ requires = ["hatchling", "hatch-vcs"]
 build-backend = "hatchling.build"
 
 [project]
-name = "openjd-sessions"
+name = "openjd-model"
 authors = [
-  {name = "Amazon Web Services"},
+  { name = "Amazon Web Services" }
 ]
 dynamic = ["version"]
 readme = "README.md"
 license = "Apache-2.0"
 requires-python = ">=3.9"
-description = "Provides a library that can be used to build a runtime that is able to run Jobs in a Session as defined by Open Job Description."
+description = "Provides a Python implementation of the data model for Open Job Description's template schemas."
 # https://pypi.org/classifiers/
 classifiers = [
   "Development Status :: 5 - Production/Stable",
@@ -29,19 +29,19 @@ classifiers = [
   "Topic :: Software Development :: Libraries"
 ]
 dependencies = [
-  "openjd-model == 0.4.*",
-  "pywin32 == 306; platform_system == 'Windows'",
-  "psutil == 5.9.*; platform_system == 'Windows'",
+  "pyyaml == 6.0.*",
+  "pydantic ~= 1.10",
 ]
 
 [project.urls]
-Homepage = "https://github.com/OpenJobDescription/openjd-sessions-for-python"
-Source = "https://github.com/OpenJobDescription/openjd-sessions-for-python"
+Homepage = "https://github.com/OpenJobDescription/openjd-model-for-python"
+Source = "https://github.com/OpenJobDescription/openjd-model-for-python"
 
 [tool.hatch.build]
 artifacts = [
   "*_version.py",
 ]
+only-packages = true
 
 [tool.hatch.version]
 source = "vcs"
@@ -60,7 +60,7 @@ sources = [
   "_version.py",
 ]
 destinations = [
-  "src/openjd/sessions",
+  "src/openjd/model",
 ]
 
 [tool.hatch.build.targets.sdist]
@@ -125,13 +125,6 @@ known-first-party = [
   "openjd",
 ]
 
-[tool.ruff.lint.per-file-ignores]
-# We need to use a platform assertion to short-circuit mypy type checking on non-Windows platforms
-# https://mypy.readthedocs.io/en/stable/common_issues.html#python-version-and-system-platform-checks
-# This causes imports to come after regular Python statements causing flake8 rule E402 to be flagged
-"src/openjd/sessions/_win32/*.py" = ["E402"]
-
-
 [tool.black]
 line-length = 100
 
@@ -140,7 +133,7 @@ xfail_strict = false
 addopts = [
     "-rfEx",
     "--durations=5",
-    "--cov=src/openjd/sessions/",
+    "--cov=src/openjd/model",
     "--color=yes",
     "--cov-report=html:build/coverage",
     "--cov-report=xml:build/coverage/coverage.xml",
@@ -153,9 +146,7 @@ addopts = [
 [tool.coverage.run]
 branch = true
 parallel = true
-plugins = [
-  "coverage_conditional_plugin"
-]
+
 
 [tool.coverage.paths]
 source = [
@@ -164,27 +155,7 @@ source = [
 
 [tool.coverage.report]
 show_missing = true
-fail_under = 79
-
-# https://github.com/wemake-services/coverage-conditional-plugin
-[tool.coverage.coverage_conditional_plugin.omit]
-"sys_platform != 'win32'" = [
-  "src/openjd/sessions/_win32/*.py",
-  "src/openjd/sessions/_scripts/_windows/*.py",
-  "src/openjd/sessions/_windows*.py"
-]
-
-[tool.coverage.coverage_conditional_plugin.rules]
-# This cannot be empty otherwise coverage-conditional-plugin crashes with:
-# AttributeError: 'NoneType' object has no attribute 'items'
-#
-# =========== WARNING TO REVIEWERS ============
-#
-# Any rules added here are ran through Python's
-# eval() function so watch for code injection
-# attacks.
-#
-# =========== WARNING TO REVIEWERS ============
+fail_under = 94
 
 [tool.semantic_release]
 # Can be removed or set to true once we are v1

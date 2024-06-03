@@ -20,107 +20,6 @@ hatch run fmt
 hatch run all:test
 ```
 
-## Architecture
-
-This module is responsible for providing functionality for a running Open Job Description Session.
-
-The public interface is via the `Session` class. An instance of this class represents a single
-running Session context, in the terms of the Open Job Description's Job Running Model.
-
-The interface to a `Session` follows an asychronous computing model backed, internally,
-by threads. The `Session` has a state that gates what is able to be performed, and when.
-A user can begin running a new Action, whether that be the enter/exit of an Environment or 
-the run-action of a Task, when the `Session` is in `READY` state. Running the action starts
-background threads that will monitor the running subprocess, and forward its stdout/stderr to
-a given Logger.
-
-The internal mechanics of running an action in a `Session` looks like:
-
-1. User calls `Session.enter_environment()`, `Session.exit_environment()`, or `Session.run_task()`
-2. That creates a `StepScriptRunner` or `EnvironmentScriptRunner` (depending on the method called),
-   and calls the `.enter()`, `.exit()` or `.run()` method as appropriate.
-3. That, in turn:
-    1. Uses a `EmbeddedFiles` instance to materialize any attachments/files from the script
-       into a subdirectory of the Session's working directory.
-    2. Creates a `LoggingSubprocess` and wires the callback of that instance to invoke a callback in the
-       `*Runner` instance when the subprocess exits.
-        1. The callback of the `*Runner` instance will, in turn, invoke a callback in the `Session` instance
-           to tell the `Session` that the process has exited.
-        2. Once called, the callback in the `Session` instance will call a callback that is provided to the
-           `Session` when it is constructed, this asychronously informs the creator of the `Session`
-           that the subprocess has exited.
-    3. Runs the `LoggingSubprocess` within a Future and then returns while that runs.
-        1. The thread/future that runs the `LoggingSubprocess`:
-            1. Starts the subprocess
-            2. Forwards all of the subprocess' stdout/stderr to the `logger` given to the `LoggingSubprocess`
-            3. Invokes the callback that was given to the `LoggingSubprocess` when the subprocess exits
-
-Canceling a running action is done via `Session.cancel()`. If there is a running action, that has not already been
-canceled, then the `*Runner` instance that is running the action will start a Future thread that performs the
-subprocess cancelation logic -- sending the appropriate signals at the appropriate times. Sending that signal
-will cause the subprocess to exit, which will cause the `LoggingSubprocess` to invoke its callback signaling a
-subprocess exit; and the chain of callbacks proceeding from there as per any other subprocess exit.
-
-When a `Session` is created, we attach an `ActionMonitoringFilter` to the logger that was given
-to the `Session`; this filter is removed from the logger when the `__del__()` method of the `Session`
-is called -- so, users should `del session` when done with one. The `ActionMonitoringFilter` watches for
-Open Job Description messages in the output stream from the running subprocess (these are lines that start with "openjd_"),
-and invokes a callback in the `Session` when encountering one. This callback records info on the event
-within the `Session`.
-
-## Testing
-
-This package strives for very high test coverage of its functionality. You are asked to help us maintain our
-high bar by adding thorough test coverage for any changes you make and any testing gaps that you discover.
-
-To run our tests simply run: `hatch run test`
-
-If you have multiple version of Python installed (e.g. Python 3.9, 3.10, 3.11, etc) then you can run the tests
-against all of your installed versions of python with: `hatch run all:test`
-
-### User Impersonation
-
-This library contains functionality to run subprocesses as a user other than the one that is
-running the main process. You will need to take special steps to ensure that your changes
-keep this functionality running in tip-top shape.
-
-#### User Impersonation: POSIX-Based Systems
-
-To run the impersonation tests you must create additional users and groups for the impersonation
-tests on your local system and then set environment variables before running the tests.
-
-Scripting has been added to this repository to test this functionality on Linux using
-docker containers that we have set up for this purpose.
-
-To run these tests:
-1. With users configured locally in /etc/passwd & /etc/groups: `scripts/run_sudo_tests.sh --build`
-2. With users via an LDAP client: `scripts/run_sudo_tests.sh --build --ldap`
-
-If you are unable to use the provided docker container then you need to set up the `OPENJD_TEST_SUDO_*`
-environment variables and their referenced users and groups as in the Dockerfile under
-`testing_containers/localuser_sudo_environment/Dockerfile` in this repository.
-
-#### User Impersonation: Windows-Based Systems
-
-This library performs impersonation differently based on whether it is being run as part
-of an OS Service (with Windows Session ID 0) or an interactive logon session (which has
-Windows Session ID > 0). Thus, changes to the impersonation logic may need to be tested in
-both of these environments.
-
-To run the impersonation tests you will require a separate user on your workstation, and its
-password, that you are able to logon as. Then:
-
-1. Set the environment variable `OPENJD_TEST_WIN_USER_NAME` to the username of that user;
-2. Set the environment variable `OPENJD_TEST_WIN_USER_PASSWORD` to that user's password; and
-3. Then run the tests with `hatch run test` as normal.
-    * If done correctly, then you should not see any xfail tests related to impersonation.
-
-Run these tests in both:
-1. A terminal in your interactive logon session to test the impersonation logic when 
-   Windows Session ID > 0; and
-2. An `ssh` terminal into your workstation to test the impersonation logic when Windows
-   Session ID is 0.
-
 ## The Package's Public Interface
 
 This package is a library wherein we are explicit and intentional with what we expose as public.
@@ -197,7 +96,7 @@ from typing import Dict as _Dict
 Another convention that we are adopting in this package is that all functions/methods that are a
 part of the package's external interface should refrain from using positional-or-keyword arguments.
 All arguments should be keyword-only unless the argument name has no true external meaning (e.g.
-arg1, arg2, etc for `min`). Benefits of this convention are:
+arg1, arg2, etc. for `min`). Benefits of this convention are:
 
 1. All uses of the public APIs of this package are forced to be self-documenting; and
 2. The benefits set forth in PEP 570 ( https://www.python.org/dev/peps/pep-0570/#problems-without-positional-only-parameters ).
@@ -227,6 +126,16 @@ try:
 except ValueError as e:
     # Error handling...
 ```
+
+## About the data model
+
+1. The data model is written using Pydantic. Pydantic provides the framework for parsing and validating
+    input job templates.
+1. We intentionally use `Decimal` in place of `float` in our data models as `Decimal` will preserve the
+    precision present in the input whereas `float` will not.
+1. Some classes in the model have "Definition" or "Template" version, as well as a "Target model" version.
+    These exist for parts of the model where instantiating a JobTemplate into a Job changes the model in
+    some way. These are not necessary for all parts of the model.
 
 ## Super verbose test output
 
